@@ -1,0 +1,194 @@
+<<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SynthesisAI Mobile</title>
+    <style>
+        /* --- CORE STYLES --- */
+        body { background-color: #050505; color: #0f0; font-family: 'Courier New', Courier, monospace; padding: 15px; margin: 0; padding-bottom: 80px; }
+        h1 { text-align: center; letter-spacing: 4px; color: #fff; font-size: 1.5rem; margin-bottom: 20px; }
+
+        /* --- CARD STYLES --- */
+        .card { 
+            background: #111; border: 1px solid #333; 
+            margin-bottom: 15px; border-radius: 8px; overflow: hidden;
+        }
+        
+        .card-header {
+            padding: 15px; cursor: pointer; display: flex; 
+            justify-content: space-between; align-items: center;
+            background: #1a1a1a; border-bottom: 1px solid #333;
+            user-select: none; /* Prevents text highlighting when clicking */
+        }
+        
+        .card-title { font-size: 1.1rem; font-weight: bold; text-transform: uppercase; margin: 0; }
+        
+        /* THE BADGES */
+        .badge {
+            font-size: 0.7rem; padding: 4px 8px; border-radius: 4px; 
+            background: #000; border: 1px solid #555; color: #888;
+            margin-left: 10px; letter-spacing: 1px;
+        }
+
+        /* --- COLLAPSE LOGIC (The Fix) --- */
+        /* By default, body is HIDDEN */
+        .card-body {
+            display: none; 
+            padding: 20px;
+            border-top: 1px solid #333;
+            color: #ddd; line-height: 1.6;
+        }
+
+        /* When 'open' class is added, body becomes VISIBLE */
+        .card.open .card-body {
+            display: block; 
+        }
+
+        /* COLORS */
+        .visionary-border { border-left: 4px solid #00ffff; }
+        .skeptic-border { border-left: 4px solid #ff0055; }
+        .judge-border { border-left: 4px solid #00ff00; }
+
+        .vis-text { color: #00ffff; }
+        .skep-text { color: #ff0055; }
+        .jud-text { color: #00ff00; }
+
+        /* INPUT ZONE */
+        .input-zone {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: #000; border-top: 1px solid #333;
+            padding: 10px; display: flex; gap: 8px; z-index: 100;
+        }
+        input { flex-grow: 1; padding: 12px; background: #222; border: 1px solid #444; color: #fff; border-radius: 6px; outline: none; }
+        button { padding: 12px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; }
+        .btn-send { background: #0f0; color: #000; width: 70px; }
+        
+        /* MIC BUTTON */
+        .btn-mic { background: #333; color: #fff; width: 50px; font-size: 1.2rem; }
+        .btn-mic.listening { background: #ff0055; animation: pulse 1.5s infinite; }
+        
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .loader { text-align: center; color: #888; display: none; margin-top: 50px; }
+    </style>
+</head>
+<body>
+
+    <h1>SYNTHESIS<span style="color:#0f0">AI</span></h1>
+    
+    <div id="loader" class="loader">
+        <p>SUMMONING THE COUNCIL...</p>
+        <p>⚠️ 👁️ ⚖️</p>
+    </div>
+
+    <div id="results"></div>
+
+    <div class="input-zone">
+        <button id="micBtn" class="btn-mic" onclick="toggleMic()">🎤</button>
+        <input type="text" id="queryInput" placeholder="Command..." onkeypress="handleEnter(event)">
+        <button class="btn-send" onclick="runSynthesis()">GO</button>
+    </div>
+
+    <script>
+        // --- 1. FOOLPROOF TOGGLE FUNCTION ---
+        function toggleCard(headerElement) {
+            // Find the parent card of the header that was clicked
+            const card = headerElement.parentElement;
+            // Toggle the 'open' class
+            if (card.classList.contains('open')) {
+                card.classList.remove('open');
+            } else {
+                card.classList.add('open');
+            }
+        }
+
+        // --- 2. APP LOGIC ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+        const micBtn = document.getElementById('micBtn');
+        const queryInput = document.getElementById('queryInput');
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.lang = 'en-US';
+            recognition.onstart = () => micBtn.classList.add('listening');
+            recognition.onend = () => micBtn.classList.remove('listening');
+            recognition.onresult = (e) => {
+                queryInput.value = e.results[0][0].transcript;
+                runSynthesis();
+            };
+        } else { micBtn.style.display = 'none'; }
+
+        function toggleMic() {
+            micBtn.classList.contains('listening') ? recognition.stop() : recognition.start();
+        }
+
+        function speakVerdict(text) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.pitch = 0.8;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function handleEnter(e) { if(e.key === 'Enter') runSynthesis(); }
+
+        async function runSynthesis() {
+            const query = queryInput.value;
+            if (!query) return;
+
+            const loader = document.getElementById('loader');
+            const results = document.getElementById('results');
+            loader.style.display = 'block';
+            results.innerHTML = ''; 
+
+            try {
+                const response = await fetch('/process_query', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({query: query})
+                });
+                const data = await response.json();
+                
+                loader.style.display = 'none';
+
+                results.innerHTML = `
+                    <div class="card visionary-border">
+                        <div class="card-header" onclick="toggleCard(this)">
+                            <div class="card-title vis-text">🔥 The Visionary</div>
+                            <div class="badge">GEMINI</div>
+                        </div>
+                        <div class="card-body">
+                            <p>${data.visionary.replace(/\n/g, '<br>')}</p>
+                        </div>
+                    </div>
+
+                    <div class="card skeptic-border">
+                        <div class="card-header" onclick="toggleCard(this)">
+                            <div class="card-title skep-text">🛡️ The Skeptic</div>
+                            <div class="badge">LLAMA 3</div>
+                        </div>
+                        <div class="card-body">
+                            <p>${data.skeptic.replace(/\n/g, '<br>')}</p>
+                        </div>
+                    </div>
+
+                    <div class="card judge-border open">
+                        <div class="card-header" onclick="toggleCard(this)">
+                            <div class="card-title jud-text">⚖️ The Verdict</div>
+                            <div class="badge">GEMINI</div>
+                        </div>
+                        <div class="card-body">
+                            <p>${data.final_verdict.replace(/\n/g, '<br>')}</p>
+                        </div>
+                    </div>
+                `;
+                speakVerdict(data.final_verdict);
+            } catch (e) {
+                loader.style.display = 'none';
+                results.innerHTML = `<div style="color:red; padding:20px;">ERROR: ${e}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
