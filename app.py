@@ -1,129 +1,80 @@
-import streamlit as st
 import os
-import google.generativeai as genai
-from groq import Groq
+import io
 from dotenv import load_dotenv
+import streamlit as st
+from google import genai
+from groq import Groq
+from gtts import gTTS
+from streamlit_mic_recorder import speech_to_text
 
-# --- INITIALIZATION & STYLING ---
+# 1. SETUP
 load_dotenv()
-st.set_page_config(page_title="Synthesis Engine", page_icon="🧠", layout="centered")
+st.set_page_config(page_title="Synthesis Engine", page_icon="🧠")
 
-# iOS-inspired Custom CSS
-st.markdown("""
-    <style>
-    .main { background-color: #F2F2F7; }
-    div.stButton > button {
-        border-radius: 12px;
-        background-color: #007AFF;
-        color: white;
-        border: none;
-        transition: 0.3s;
-        font-weight: bold;
-    }
-    div.stButton > button:hover { background-color: #0051A8; }
-    .stTextArea textarea { border-radius: 15px; border: 1px solid #C7C7CC; }
-    .verdict-box {
-        background-color: white;
-        padding: 20px;
-        border-radius: 15px;
-        box-shadow: 0px 4px 12px rgba(0,0,0,0.1);
-        border-left: 5px solid #007AFF;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# 2. INTERNAL SECURITY GATE
+if "auth" not in st.session_state:
+    st.session_state.auth = False
 
-# --- SECURITY GATE ---
-def check_password():
-    if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
-    
-    if not st.session_state.authenticated:
-        st.markdown("<h2 style='text-align: center;'>🔐 Synthesis Security</h2>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1,2,1])
-        with col2:
-            pwd = st.text_input("Access Key", type="password", placeholder="Enter Password")
-            if st.button("Unlock Engine"):
-                if pwd == os.getenv("APP_PASSWORD"):
-                    st.session_state.authenticated = True
-                    st.rerun()
-                else:
-                    st.error("Invalid Credentials")
-        return False
-    return True
+if not st.session_state.auth:
+    pwd = st.text_input("Access Key", type="password")
+    if st.button("Unlock"):
+        if pwd == os.getenv("APP_PASSWORD"):
+            st.session_state.auth = True
+            st.rerun()
+        else: st.error("Denied")
+    st.stop()
 
-if check_password():
-    # --- API CLIENTS ---
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+# 3. INITIALIZE CLIENTS (The New google-genai way)
+gemini = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+groq = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-    st.title("🧠 Synthesis Engine")
-    st.caption("Main Brain: Groq (Llama 3) | Agents: Gemini 3 Flash")
+st.title("🧠 Synthesis Engine v3.0")
+st.caption("Main Brain: Groq | Agents: Gemini 3 Flash")
 
-    # --- INPUT SECTION ---
-    user_input = st.text_area("Input Concept:", height=150, placeholder="Describe the clinical or behavioral concept...")
-    
-    col_mic, col_exec = st.columns([1,1])
-    with col_mic:
-        if st.button("🎤 Mic / Dictate"):
-            st.info("Use system dictation (Win+H / Cmd+Control+S)")
+# 4. INPUT (Voice or Text)
+col1, col2 = st.columns([1, 3])
+with col1:
+    st.write("Voice Input:")
+    v_input = speech_to_text(start_prompt="🎤 Start", stop_prompt="🛑 Stop", key='stt')
+with col2:
+    manual_input = st.text_area("Or type here:", value=v_input if v_input else "")
+
+# 5. EXECUTION
+if st.button("EXECUTE COUNCIL"):
+    input_text = manual_input if manual_input else v_input
+    if not input_text:
+        st.warning("Needs input.")
+    else:
+        with st.status("Council Deliberating...", expanded=True):
+            # VISIONARY (Gemini 3 Flash - Shorthand)
+            v_res = gemini.models.generate_content(
+                model="gemini-3-flash-preview",
+                config={'system_instruction': "ROLE:Visionary. TASK:Max-potential. FORMAT:Shorthand."},
+                contents=input_text
+            )
             
-    # --- CORE ENGINE LOGIC (TOKEN COMPRESSED) ---
-    if col_exec.button("🚀 EXECUTE SYNTHESIS"):
-        if not user_input:
-            st.error("Input required.")
-        else:
-            with st.status("Council Processing...", expanded=True) as status:
-                
-                # AGENT 1: Visionary (Compressed Gemini)
-                # Shorthand prompt saves roughly 40-60% tokens per call
-                v_model = genai.GenerativeModel('gemini-1.5-flash')
-                v_prompt = f"ROLE:Visionary. TASK:Max-potential of {user_input}. FORMAT:Shorthand-Bullets. No intro/outro."
-                visionary_res = v_model.generate_content(v_prompt)
-                st.write("✅ Visionary mapped.")
+            # SKEPTIC (Gemini 3 Flash - Shorthand)
+            s_res = gemini.models.generate_content(
+                model="gemini-3-flash-preview",
+                config={'system_instruction': "ROLE:Skeptic. TASK:Critical-risks. FORMAT:Shorthand."},
+                contents=input_text
+            )
 
-                # AGENT 2: Skeptic (Compressed Gemini)
-                s_prompt = f"ROLE:Skeptic. TASK:Critical-risks of {user_input}. FORMAT:Shorthand-Bullets. No intro/outro."
-                skeptic_res = v_model.generate_content(s_prompt)
-                st.write("✅ Skeptic challenged.")
+            # JUDGE (Groq - Synthesis)
+            verdict = groq.chat.completions.create(
+                model="llama3-70b-8192",
+                messages=[{"role": "user", "content": f"Synthesize these:\nV: {v_res.text}\nS: {s_res.text}"}]
+            )
+            st.session_state.verdict = verdict.choices[0].message.content
 
-                # AGENT 3: Judge & Main Brain (Groq/Llama 3)
-                # Groq synthesizes the shorthand into a professional verdict
-                judge_prompt = f"""
-                Analyze the following data for a clinical verdict.
-                VISIONARY: {visionary_res.text}
-                SKEPTIC: {skeptic_res.text}
-                
-                Instruction: Provide a cohesive synthesis and final path forward.
-                """
-                
-                verdict = groq_client.chat.completions.create(
-                    model="llama3-70b-8192",
-                    messages=[{"role": "system", "content": "You are the Senior Clinical Judge. Provide professional, structured verdicts."},
-                              {"role": "user", "content": judge_prompt}]
-                )
-                
-                st.session_state.final_verdict = verdict.choices[0].message.content
-                status.update(label="Synthesis Complete", state="complete")
-
-    # --- OUTPUT SECTION ---
-    if "final_verdict" in st.session_state:
-        st.markdown("### ⚖️ Final Verdict")
-        st.markdown(f'<div class="verdict-box">{st.session_state.final_verdict}</div>', unsafe_allow_html=True)
-        
-        # READ VERDICT BUTTON
-        if st.button("🔊 Read Verdict Aloud"):
-            # Clean text for JS injection
-            clean_verdict = st.session_state.final_verdict.replace("'", "\\'").replace("\n", " ")
-            js_code = f"""
-            <script>
-            var msg = new SpeechSynthesisUtterance('{clean_verdict}');
-            msg.rate = 0.9; // Slightly slower for clinical clarity
-            window.speechSynthesis.speak(msg);
-            </script>
-            """
-            st.components.v1.html(js_code, height=0)
-
-    # --- LOCK BUTTON ---
-    if st.sidebar.button("🔒 Secure Lock"):
-        st.session_state.authenticated = False
-        st.rerun()
+# 6. OUTPUT & READ ALOUD
+if "verdict" in st.session_state:
+    st.markdown("---")
+    st.subheader("⚖️ Final Verdict")
+    st.write(st.session_state.verdict)
+    
+    if st.button("🔊 Read Verdict Aloud"):
+        tts = gTTS(text=st.session_state.verdict, lang='en', slow=False)
+        fp = io.BytesIO()
+        tts.write_to_fp(fp)
+        st.audio(fp.getvalue(), format="audio/mp3", autoplay=True)
