@@ -1,23 +1,108 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Synthesis Engine v2.5</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Synthesis Engine | Clinical Gate</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap">
+    <style>
+        :root {
+            --ios-blue: #007AFF;
+            --ios-bg: #F2F2F7;
+            --glass: rgba(255, 255, 255, 0.7);
+        }
+
+        body {
+            background-color: var(--ios-bg);
+            font-family: 'Inter', -apple-system, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .gate-card {
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 40px;
+            border-radius: 28px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+
+        h1 { font-weight: 600; color: #1C1C1E; margin-bottom: 8px; }
+        p { color: #8E8E93; font-size: 14px; margin-bottom: 24px; }
+
+        input[type="password"] {
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            border: 1px solid #C7C7CC;
+            margin-bottom: 16px;
+            font-size: 16px;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            border: none;
+            background-color: var(--ios-blue);
+            color: white;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        button:active { transform: scale(0.98); }
+
+        .mic-btn {
+            background: none;
+            color: var(--ios-blue);
+            margin-top: 15px;
+            font-size: 13px;
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Synthesis Engine <span class="version">v2.5</span></h1>
-        
-        <textarea id="user-prompt" placeholder="Enter your query for the Council..."></textarea>
-        
-        <button onclick="sendToSynthesis()">Execute Synthesis</button>
 
-        <div id="output-area">
-            </div>
-
-        <div id="status-bar">System Ready</div>
+    <div class="gate-card" id="gate">
+        <h1>Synthesis Engine</h1>
+        <p>Biometric Verification Required</p>
+        <input type="password" id="accessKey" placeholder="Access Key">
+        <button onclick="verifyAccess()">Unlock Engine</button>
+        <button class="mic-btn" onclick="startVoice()">🎤 Test Voice Synthesis</button>
     </div>
 
-    <script src="/static/script.js"></script>
+    <script>
+        function verifyAccess() {
+            const key = document.getElementById('accessKey').value;
+            // Matches your APP_PASSWORD in .env
+            if(key === "Synthesis2026") {
+                // Fade out effect
+                document.getElementById('gate').style.opacity = '0';
+                setTimeout(() => {
+                    // Redirect to your Streamlit app port
+                    window.location.href = "http://localhost:8501";
+                }, 500);
+            } else {
+                alert("Access Denied.");
+            }
+        }
+
+        function startVoice() {
+            const msg = new SpeechSynthesisUtterance("Voice engine active. Ready for clinical synthesis.");
+            window.speechSynthesis.speak(msg);
+        }
+    </script>
 </body>
 </html>
