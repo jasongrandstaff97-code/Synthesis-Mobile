@@ -1,0 +1,7 @@
+quart
+hypercorn
+google-genai
+groq
+pinecone-client
+python-dotenv
+requests
